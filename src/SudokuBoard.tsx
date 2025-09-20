@@ -3,12 +3,13 @@ import SudokuCell from "./SudokuCell";
 
 type Props = {
   board: number[][];
+  fixedMask: boolean[][];
   onChange: (row: number, col: number, value: number) => void;
 };
 
-const SudokuBoard: React.FC<Props> = ({ board, onChange }) => {
+const SudokuBoard: React.FC<Props> = ({ board, fixedMask, onChange }) => {
   return (
-    <div className="inline-block bg-white">
+    <div className="inline-block">
       {board.map((row, i) => (
         <div key={i} className="flex">
           {row.map((value, j) => (
@@ -17,6 +18,7 @@ const SudokuBoard: React.FC<Props> = ({ board, onChange }) => {
               row={i}
               col={j}
               value={value}
+              isFixed={fixedMask[i][j]}
               onChange={onChange}
             />
           ))}
