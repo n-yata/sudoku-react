@@ -1,37 +1,17 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import SudokuBoard from "./SudokuBoard";
 import NumberPad from "./NumberPad";
+import { generatePuzzle, Puzzle } from "./utils/sudokuGenerator";
 
-const puzzles: { question: number[][]; solution: number[][] }[] = [
-  {
-    question: [
-      [5, 3, 0, 0, 7, 0, 0, 0, 0],
-      [6, 0, 0, 1, 9, 5, 0, 0, 0],
-      [0, 9, 8, 0, 0, 0, 0, 6, 0],
-      [8, 0, 0, 0, 6, 0, 0, 0, 3],
-      [4, 0, 0, 8, 0, 3, 0, 0, 1],
-      [7, 0, 0, 0, 2, 0, 0, 0, 6],
-      [0, 6, 0, 0, 0, 0, 2, 8, 0],
-      [0, 0, 0, 4, 1, 9, 0, 0, 5],
-      [0, 0, 0, 0, 8, 0, 0, 7, 9],
-    ],
-    solution: [
-      [5, 3, 4, 6, 7, 8, 9, 1, 2],
-      [6, 7, 2, 1, 9, 5, 3, 4, 8],
-      [1, 9, 8, 3, 4, 2, 5, 6, 7],
-      [8, 5, 9, 7, 6, 1, 4, 2, 3],
-      [4, 2, 6, 8, 5, 3, 7, 9, 1],
-      [7, 1, 3, 9, 2, 4, 8, 5, 6],
-      [9, 6, 1, 5, 3, 7, 2, 8, 4],
-      [2, 8, 7, 4, 1, 9, 6, 3, 5],
-      [3, 4, 5, 2, 8, 6, 1, 7, 9],
-    ],
-  },
-];
+type HistoryEntry = {
+  difficulty: string;
+  clearedAt: string;
+};
 
 function App() {
-  const [puzzleIndex] = useState(0);
-  const [board, setBoard] = useState(puzzles[0].question);
+  const [difficulty, setDifficulty] = useState<string>("easy");
+  const [puzzle, setPuzzle] = useState<Puzzle>(generatePuzzle("easy"));
+  const [board, setBoard] = useState<number[][]>(puzzle.question);
   const [message, setMessage] = useState("");
   const [errors, setErrors] = useState<boolean[][]>(
     Array(9)
@@ -47,11 +27,52 @@ function App() {
     row: number;
     col: number;
   } | null>(null);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
 
+  // 固定セルマスク
   const fixedMask = useMemo(
-    () => puzzles[puzzleIndex].question.map((row) => row.map((v) => v !== 0)),
-    [puzzleIndex]
+    () => puzzle.question.map((row) => row.map((v) => v !== 0)),
+    [puzzle]
   );
+
+  // 初回ロード時に履歴を取得
+  useEffect(() => {
+    const stored = localStorage.getItem("sudokuHistory");
+    if (stored) {
+      setHistory(JSON.parse(stored));
+    }
+  }, []);
+
+  const saveHistory = (newHistory: HistoryEntry[]) => {
+    setHistory(newHistory);
+    localStorage.setItem("sudokuHistory", JSON.stringify(newHistory));
+  };
+
+  const resetBoard = (newPuzzle: Puzzle) => {
+    setPuzzle(newPuzzle);
+    setBoard(newPuzzle.question);
+    setErrors(
+      Array(9)
+        .fill(null)
+        .map(() => Array(9).fill(false))
+    );
+    setConflicts(
+      Array(9)
+        .fill(null)
+        .map(() => Array(9).fill(false))
+    );
+    setSelectedCell(null);
+    setMessage("");
+  };
+
+  // 難易度変更時に自動で新しい問題生成
+  useEffect(() => {
+    resetBoard(generatePuzzle(difficulty));
+  }, [difficulty]);
+
+  const handleNewPuzzle = () => {
+    resetBoard(generatePuzzle(difficulty));
+  };
 
   const handleChange = (row: number, col: number, value: number) => {
     if (fixedMask[row][col]) return;
@@ -62,7 +83,7 @@ function App() {
   };
 
   const handleCheck = () => {
-    const solution = puzzles[puzzleIndex].solution;
+    const solution = puzzle.solution;
     let correct = true;
     const newErrors = Array(9)
       .fill(null)
@@ -77,10 +98,20 @@ function App() {
       }
     }
     setErrors(newErrors);
-    setMessage(correct ? "🎉 クリア！" : "❌ 間違いがあります。");
+
+    if (correct) {
+      setMessage("🎉 クリア！おめでとうございます！");
+      const newEntry: HistoryEntry = {
+        difficulty,
+        clearedAt: new Date().toISOString(),
+      };
+      const newHistory = [...history, newEntry];
+      saveHistory(newHistory);
+    } else {
+      setMessage("❌ 間違いがあります。");
+    }
   };
 
-  // 数字パッドから入力
   const handleNumberPad = (num: number) => {
     if (!selectedCell) return;
     const { row, col } = selectedCell;
@@ -90,6 +121,21 @@ function App() {
   return (
     <div className="flex flex-col items-center p-4">
       <h1 className="text-2xl font-bold mb-4">数独ゲーム</h1>
+
+      {/* 難易度選択 */}
+      <div className="mb-4">
+        <label className="mr-2">難易度:</label>
+        <select
+          value={difficulty}
+          onChange={(e) => setDifficulty(e.target.value)}
+          className="border rounded p-1"
+        >
+          <option value="easy">簡単</option>
+          <option value="medium">普通</option>
+          <option value="hard">難しい</option>
+        </select>
+      </div>
+
       <SudokuBoard
         board={board}
         fixedMask={fixedMask}
@@ -99,7 +145,14 @@ function App() {
         setSelectedCell={setSelectedCell}
         onChange={handleChange}
       />
+
       <div className="mt-4 flex gap-2">
+        <button
+          onClick={handleNewPuzzle}
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          新しい問題
+        </button>
         <button
           onClick={handleCheck}
           className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
@@ -107,9 +160,32 @@ function App() {
           回答チェック
         </button>
       </div>
+
       {message && <p className="mt-4 text-lg">{message}</p>}
-      {/* スマホ用ナンバーパッド */}
+
       <NumberPad onInput={handleNumberPad} />
+
+      {/* 履歴 */}
+      <div className="mt-8 w-full max-w-md">
+        <h2 className="text-xl font-bold mb-2">クリア履歴</h2>
+        {history.length === 0 ? (
+          <p className="text-gray-500">まだクリア履歴はありません</p>
+        ) : (
+          <ul className="space-y-2">
+            {history.map((h, idx) => (
+              <li
+                key={idx}
+                className="flex justify-between items-center bg-gray-100 p-2 rounded"
+              >
+                <span>
+                  {h.difficulty} -{" "}
+                  {new Date(h.clearedAt).toLocaleString("ja-JP")}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
