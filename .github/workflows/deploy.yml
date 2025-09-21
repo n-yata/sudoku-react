@@ -24,13 +24,23 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: "npm"
 
-      # npm ci は lockfile と npm の相性で落ちやすいので install を推奨
+      - name: Print env (debug)
+        run: |
+          node -v
+          npm -v
+          pwd
+          ls -la
+
+      # lockfile と npm の相性で失敗するケースを吸収
       - name: Install dependencies
-        run: npm install
+        run: |
+          npm ci || npm install
 
+      # Vite の詳細ログを出す
       - name: Build
-        run: npm run build
+        run: npm run build -- --debug
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
